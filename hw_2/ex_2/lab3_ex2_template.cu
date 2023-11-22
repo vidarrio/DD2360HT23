@@ -12,6 +12,8 @@ __global__ void gemm(DataType *A, DataType *B, DataType *C, int numARows,
   int col = blockIdx.x * blockDim.x + threadIdx.x;
   int index = row * numBColumns + col;
   
+  
+
   if (row < numARows && col < numBColumns) {
     for (int i = 0; i < numAColumns; i++) {
       C[index] += A[row * numAColumns + i] * B[i * numBColumns + col];
@@ -70,9 +72,9 @@ int main(int argc, char **argv) {
   }
 
   //@@ Insert code below to allocate GPU memory here
-  cudaMalloc((void **)&deviceA, numARows * numAColumns * sizeof(DataType));
-  cudaMalloc((void **)&deviceB, numBRows * numBColumns * sizeof(DataType));
-  cudaMalloc((void **)&deviceC, numCRows * numCColumns * sizeof(DataType));
+  cudaMalloc(&deviceA, numARows * numAColumns * sizeof(DataType));
+  cudaMalloc(&deviceB, numBRows * numBColumns * sizeof(DataType));
+  cudaMalloc(&deviceC, numCRows * numCColumns * sizeof(DataType));
 
   //@@ Insert code to below to Copy memory to the GPU here
   cudaMemcpy(deviceA, hostA, numARows * numAColumns * sizeof(DataType), cudaMemcpyHostToDevice);
@@ -80,18 +82,24 @@ int main(int argc, char **argv) {
 
 
   //@@ Initialize the grid and block dimensions here
-  dim3 DimGrid(1, 1, 1);
-  dim3 DimBlock(1, 1, 1);
+  
+  int n = numARows*numBColumns;
+  int block_size = 32;
+  int grid_size = ceil(n/block_size);
+
+  dim3 threadsPerBlock(block_size, block_size, 1);
+
+  dim3 blocksPerGrid(grid_size, grid_size, 1);
 
   //@@ Launch the GPU Kernel here
-  gemm<<<DimGrid, DimBlock>>>(deviceA, deviceB, deviceC, numARows, numAColumns, numBRows, numBColumns);
+  gemm<<<blocksPerGrid, threadsPerBlock>>>(deviceA, deviceB, deviceC, numARows, numAColumns, numBRows, numBColumns);
 
   //@@ Copy the GPU memory back to the CPU here
   cudaMemcpy(hostC, deviceC, numCRows * numCColumns * sizeof(DataType), cudaMemcpyDeviceToHost);
 
   //@@ Insert code below to compare the output with the reference
   for (int i = 0; i < numCRows * numCColumns; i++) {
-    if (hostC[i] != resultRef[i]) {
+    if (abs(hostC[i] - resultRef[i]) > 1e-5) {
       printf("Error: hostC[%d] = %f, resultRef[%d] = %f\n", i, hostC[i], i, resultRef[i]);
       break;
     }
