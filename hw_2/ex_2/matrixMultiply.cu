@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <chrono>
+#include <iostream>
 
 #define DataType double
 
@@ -14,8 +15,6 @@ __global__ void gemm(DataType *A, DataType *B, DataType *C, int numARows,
   int row = blockIdx.y * blockDim.y + threadIdx.y;
   int col = blockIdx.x * blockDim.x + threadIdx.x;
   int index = row * numBColumns + col;
-  
-  
 
   if (row < numARows && col < numBColumns) {
     for (int i = 0; i < numAColumns; i++) {
@@ -84,14 +83,24 @@ int main(int argc, char **argv) {
   cudaMemcpy(deviceB, hostB, numBRows * numBColumns * sizeof(DataType), cudaMemcpyHostToDevice);
  
   //@@ Initialize the grid and block dimensions here
-  
+
   int n = numARows*numBColumns;
-  int block_size = 32;
-  int grid_size = ceil(n/block_size);
+  int block_size = 1024;
+  int block_dim = 32;
+  int grid_dim_x = (numBColumns + block_dim - 1) / block_dim;
+  int grid_dim_y = (numARows + block_dim - 1) / block_dim;
 
-  dim3 threadsPerBlock(block_size, block_size, 1);
+  dim3 threadsPerBlock(block_dim, block_dim, 1);
 
-  dim3 blocksPerGrid(grid_size, grid_size, 1);
+  dim3 blocksPerGrid(grid_dim_x, grid_dim_y, 1);
+
+  std::cout << "n: " << n << std::endl;
+  std::cout << "threads: " << block_size * grid_dim_x * grid_dim_y << std::endl;
+  std::cout << "grid_size: " << grid_dim_x * grid_dim_y << std::endl;
+  std::cout << "grid_dim_x: " << grid_dim_x << std::endl;
+  std::cout << "grid_dim_y: " << grid_dim_y << std::endl;
+  std::cout << "block_size: " << block_size << std::endl;
+  std::cout << "block_dim: " << block_dim << std::endl;
 
   //@@ Launch the GPU Kernel here
   gemm<<<blocksPerGrid, threadsPerBlock>>>(deviceA, deviceB, deviceC, numARows, numAColumns, numBRows, numBColumns);
@@ -99,14 +108,17 @@ int main(int argc, char **argv) {
   //@@ Copy the GPU memory back to the CPU here
   cudaMemcpy(hostC, deviceC, numCRows * numCColumns * sizeof(DataType), cudaMemcpyDeviceToHost);
 
+  int prints = 0;
   //@@ Insert code below to compare the output with the reference
   for (int i = 0; i < numCRows * numCColumns; i++) {
     if (abs(hostC[i] - resultRef[i]) > 1e-5) {
       printf("Error: hostC[%d] = %f, resultRef[%d] = %f\n", i, hostC[i], i, resultRef[i]);
-      break;
+      prints++;
+      if (prints > 10) {
+        break;
+      }
     }
   }
-
 
   //@@ Free the GPU memory here
 
