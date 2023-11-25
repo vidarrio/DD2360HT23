@@ -1,8 +1,11 @@
 
 #include <stdio.h>
 #include <sys/time.h>
+#include <chrono>
 
 #define DataType double
+
+using namespace std::chrono;
 
 // Compute C = A * B
 __global__ void gemm(DataType *A, DataType *B, DataType *C, int numARows,
@@ -79,8 +82,7 @@ int main(int argc, char **argv) {
   //@@ Insert code to below to Copy memory to the GPU here
   cudaMemcpy(deviceA, hostA, numARows * numAColumns * sizeof(DataType), cudaMemcpyHostToDevice);
   cudaMemcpy(deviceB, hostB, numBRows * numBColumns * sizeof(DataType), cudaMemcpyHostToDevice);
-
-
+ 
   //@@ Initialize the grid and block dimensions here
   
   int n = numARows*numBColumns;
