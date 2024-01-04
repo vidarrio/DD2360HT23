@@ -2,8 +2,18 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <iostream>
+#include <cuda_profiler_api.h>
 
 #define DataType double
+
+double get_wall_time(){
+    struct timeval time;
+    if (gettimeofday(&time,NULL)){
+        //  Handle error
+        return 0;
+    }
+    return (double)time.tv_sec + (double)time.tv_usec * .000001;
+}
 
 __global__ void vecAdd(DataType *in1, DataType *in2, DataType *out, int len) {
   //@@ Insert code to implement vector addition here
@@ -14,13 +24,6 @@ __global__ void vecAdd(DataType *in1, DataType *in2, DataType *out, int len) {
     out[id] = in1[id] + in2[id];
   }
 }
-
-//@@ Insert code to implement timer start
-
-
-
-//@@ Insert code to implement timer stop
-
 
 int main(int argc, char **argv) {
   
@@ -34,7 +37,6 @@ int main(int argc, char **argv) {
   DataType *deviceOutput;
 
   //@@ Insert code below to read in inputLength from args
-
   if (argc != 2) {
     printf("Usage: vecAdd inputLength\n");
     exit(1);
@@ -63,14 +65,18 @@ int main(int argc, char **argv) {
     resultRef[i] = hostInput1[i] + hostInput2[i];
   }
 
-  //@@ Insert code below to allocate GPU memory here
+  //@@ start cuda profiler
+  cudaProfilerStart();
 
+  //@@ start cpu timer
+  double cpu_start = get_wall_time();
+
+  //@@ Insert code below to allocate GPU memory here
   cudaMalloc(&deviceInput1, inputLength * sizeof(DataType));
   cudaMalloc(&deviceInput2, inputLength * sizeof(DataType));
   cudaMalloc(&deviceOutput, inputLength * sizeof(DataType));
 
   //@@ Insert code to below to Copy memory to the GPU here
-
   cudaMemcpy(deviceInput1, hostInput1, inputLength * sizeof(DataType), cudaMemcpyHostToDevice);
   cudaMemcpy(deviceInput2, hostInput2, inputLength * sizeof(DataType), cudaMemcpyHostToDevice);
 
@@ -89,15 +95,18 @@ int main(int argc, char **argv) {
   dim3 dimBlock(threadsPerBlock, 1, 1);
 
   //@@ Launch the GPU Kernel here
-
   vecAdd<<<dimGrid, dimBlock>>>(deviceInput1, deviceInput2, deviceOutput, inputLength);
 
   //@@ Copy the GPU memory back to the CPU here
-
   cudaMemcpy(hostOutput, deviceOutput, inputLength * sizeof(DataType), cudaMemcpyDeviceToHost);
 
-  //@@ Insert code below to compare the output with the reference
+  //@@ stop cpu timer
+  double cpu_end = get_wall_time();
 
+  //@@ stop cuda profiler
+  cudaProfilerStop();
+
+  //@@ Insert code below to compare the output with the reference
   int errors = 0;
   for (int i = 0; i < inputLength; i++) {
     if (abs(hostOutput[i] - resultRef[i]) > 1e-5) {
@@ -106,6 +115,9 @@ int main(int argc, char **argv) {
   }
 
   std::cout << "Error: " << errors << std::endl;
+
+  //@@ Insert code below to print out the timing results
+  std::cout << "Execution time: " << cpu_end - cpu_start << std::endl;
 
   //@@ Free the GPU memory here
 

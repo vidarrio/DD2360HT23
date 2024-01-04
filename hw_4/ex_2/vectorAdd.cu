@@ -2,8 +2,18 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <iostream>
+#include <cuda_profiler_api.h>
 
 #define DataType double
+
+double get_wall_time(){
+    struct timeval time;
+    if (gettimeofday(&time,NULL)){
+        //  Handle error
+        return 0;
+    }
+    return (double)time.tv_sec + (double)time.tv_usec * .000001;
+}
 
 __global__ void vecAdd(DataType *in1, DataType *in2, DataType *out, int len) {
     //@@ Insert code to implement vector addition here
@@ -11,7 +21,6 @@ __global__ void vecAdd(DataType *in1, DataType *in2, DataType *out, int len) {
     int id = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (id < len) {
-        printf("id: %d = %f\n", id, in1[id] + in2[id]);
         out[id] = in1[id] + in2[id];
     }
 }
@@ -66,6 +75,12 @@ int main(int argc, char **argv) {
     cudaMalloc(&deviceInput2, inputLength * sizeof(DataType));
     cudaMalloc(&deviceOutput, inputLength * sizeof(DataType));
 
+    //@@ Start cuda profiler
+    cudaProfilerStart();
+
+    //@@ Start cpu timer
+    double cpu_start_time = get_wall_time();
+
     //@@ Insert code to create cuda streams here
     cudaStream_t stream[streams];
 
@@ -75,7 +90,7 @@ int main(int argc, char **argv) {
 
     //@@ Initialize the 1D grid and block dimensions here
     // 1024 is the maximum number of threads per block for compute capability 6.1
-    int threadsPerBlock = 10;
+    int threadsPerBlock = 1024;
 
     // round up to the nearest integer so we don't have a partial block
     int blocksPerGrid = (inputLength + threadsPerBlock - 1) / threadsPerBlock;
@@ -105,6 +120,12 @@ int main(int argc, char **argv) {
     //@@ Insert code below to synchronize streams
     cudaDeviceSynchronize();
 
+    //@@ Stop cpu timer
+    double cpu_end_time = get_wall_time();
+
+    //@@ Stop cuda profiler
+    cudaProfilerStop();
+
     //@@ Insert code below to compare the output with the reference
     int errors = 0;
     for (int i = 0; i < inputLength; i++) {
@@ -114,6 +135,9 @@ int main(int argc, char **argv) {
     }
 
     std::cout << "Error: " << errors << std::endl;
+
+    //@@ Insert code below to print out timing information
+    std::cout << "Execution time: " << cpu_end_time - cpu_start_time << std::endl;
 
     //@@ Destroy cuda streams here
     for (int i = 0; i < streams; i++) {
